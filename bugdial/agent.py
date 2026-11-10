@@ -51,6 +51,7 @@ ARMS = {
     "ctx_callee": ["search_code", "read_function", "submit"],
     "ctx_short_dir": ["search_code", "read_function", "submit"],
     "ctx_short_undir": ["search_code", "read_function", "submit"],
+    "ctx_short_bm25": ["search_code", "read_function", "submit"],   # control: same list format, no graph
 }
 
 
@@ -71,12 +72,12 @@ def graph_context(arm: str, view: "RepoView", issue: str, locator=None, k: int =
         return ("\n\nCode graph context (from the repository call graph): functions that the code mentioned in this "
                 "report calls, directly [1] or through one intermediate call [2]:\n" +
                 "\n".join(f"[{d}] {m}: {sig(view.cg.text[m])}" for m, d in top))
-    if arm in ("ctx_short_dir", "ctx_short_undir") and locator is not None:
-        method = "dir_bm25" if arm == "ctx_short_dir" else "undir_bm25"
+    if arm in ("ctx_short_dir", "ctx_short_undir", "ctx_short_bm25") and locator is not None:
+        method = {"ctx_short_dir": "dir_bm25", "ctx_short_undir": "undir_bm25", "ctx_short_bm25": "bm25"}[arm]
         order = locator.rank(method, issue, seeds)[:k]
-        how = ("searched only among functions called (within 3 calls) by the code this report mentions"
-               if arm == "ctx_short_dir" else
-               "searched only among functions connected (within 3 hops, any direction) to the code this report mentions")
+        how = {"ctx_short_dir": "searched only among functions called (within 3 calls) by the code this report mentions",
+               "ctx_short_undir": "searched only among functions connected (within 3 hops, any direction) to the code this report mentions",
+               "ctx_short_bm25": "keyword search over all functions in the repository"}[arm]
         return (f"\n\nCandidate functions from a code search ({how}), best first:\n" +
                 "\n".join(f"{i+1}. {m}: {sig(view.cg.text[m])}" for i, m in enumerate(order)))
     return ""
