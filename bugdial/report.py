@@ -66,7 +66,7 @@ def main():
 
     # ---- tasks
     tasks = []
-    for tp in sorted(D.glob("*_tasks.jsonl")):
+    for tp in sorted(p for p in D.glob("*_tasks.jsonl") if not p.name.startswith("real")):
         tasks += jl(tp)
     if tasks:
         c = Counter((t["repo"], bucket(t["d"])) for t in tasks)
@@ -170,8 +170,8 @@ def main():
                 continue
             xs = [ORDER.index(p[0]) for p in pts]
             ys = [p[1] for p in pts]
-            lo = [p[1] - p[2][0] for p in pts]
-            hi = [p[2][1] - p[1] for p in pts]
+            lo = [max(0.0, p[1] - p[2][0]) for p in pts]
+            hi = [max(0.0, p[2][1] - p[1]) for p in pts]
             ax.errorbar(xs, ys, yerr=[lo, hi], marker="o", capsize=3, label=m)
         ax.set_xticks(range(4), ["0", "1", "2", "3+"])
         ax.set_xlabel("symptom-to-cause distance d (call hops)")

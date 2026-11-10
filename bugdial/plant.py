@@ -132,6 +132,9 @@ def baseline_run(repo: Path, cg: CodeGraph, timeout: int) -> dict[str, bool]:
     files = sorted({i.split("::")[0] for i in ids})
     res, st = run_pytest(repo, files, timeout)
     print(f"baseline: {st}, {len(res)} test functions, {sum(r['ok'] for r in res.values())} passing", flush=True)
+    bad = [(t, r["msg"]) for t, r in res.items() if not r["ok"]][:3]
+    for t, m in bad:
+        print(f"  baseline failure {t}:\n    " + m[:700].replace("\n", "\n    "), flush=True)
     return {t: (r["ok"] and not r["skipped"]) for t, r in res.items()}
 
 
@@ -147,6 +150,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument("--max-tests", type=int, default=120)
+    ap.add_argument("--prev", help="earlier mutants.jsonl: only retry functions that survived there")
     a = ap.parse_args()
 
     repo = Path(a.repo).resolve()
@@ -163,6 +167,10 @@ def main():
     done = set()
     if out.exists():
         done = {json.loads(l)["v"] for l in out.open()}
+    if a.prev and Path(a.prev).exists():
+        prev = [json.loads(l) for l in open(a.prev)]
+        done |= {r["v"] for r in prev if r["status"] != "survived"}
+        print(f"prev: skipping {len(done)} functions already decided", flush=True)
     fns = sorted(n for n in cg.library if cg.text[n].lstrip().startswith(("def ", "async def ")) and n.split(".")[-1] not in ("__repr__", "__rich_repr__"))
     rng = random.Random(a.seed)
     rng.shuffle(fns)

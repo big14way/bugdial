@@ -94,12 +94,39 @@ for pkg in CONFIG["repos"]:
         sh([sys.executable, "-m", "pip", "uninstall", "-y", pkg])  # keep the snapshot on PYTHONPATH authoritative
         for extra in CONFIG.get("wheels_extra_" + pkg, []):
             sh([sys.executable, "-m", "pip", "install", "-q", "--no-index", "--find-links", COMP / "wheels", extra])
+    grp = CONFIG.get("group_" + pkg)
+    if grp and (dst / "pyproject.toml").exists():
+        # PEP 735 dependency group (fastapi keeps its test requirements there)
+        import tomllib
+        groups = tomllib.loads((dst / "pyproject.toml").read_text()).get("dependency-groups", {})
+        def expand(name, seen=()):
+            out = []
+            for item in groups.get(name, []):
+                if isinstance(item, dict) and "include-group" in item and item["include-group"] not in seen:
+                    out += expand(item["include-group"], seen + (name,))
+                elif isinstance(item, str):
+                    out.append(item)
+            return out
+        reqs = expand(grp)
+        print(pkg, "dependency group", grp, reqs, flush=True)
+        if reqs:
+            sh([sys.executable, "-m", "pip", "install", "-q", *reqs])
+        sh([sys.executable, "-m", "pip", "install", "-q", "-e", dst])
+        sh([sys.executable, "-m", "pip", "uninstall", "-y", pkg])
+    req = CONFIG.get("reqfile_" + pkg)
+    if req and (dst / req).exists():
+        # the project's own test requirements (internet on in CPU sessions), then drop the installed copy
+        sh([sys.executable, "-m", "pip", "install", "-q", "-r", req], cwd=dst)
+        sh([sys.executable, "-m", "pip", "uninstall", "-y", pkg])
     graph = COMP / "graphs" / f"{pkg}_{r['sha']}.json"
     emb = COMP / "embeddings" / f"{pkg}_{r['sha']}.npz"
     mut = OUT / f"{pkg}_mutants.jsonl"
+    prev = glob.glob(f"/kaggle/input/**/out/{pkg}_mutants.jsonl", recursive=True)
+    extra_args = ["--prev", prev[0]] if prev else []
     sh([sys.executable, "-m", "bugdial.plant", "--repo", dst, "--graph", graph, "--package", pkg, "--out", mut,
-        "--workers", str(os.cpu_count() or 4), "--limit", str(CONFIG["limit"].get(pkg, 300)), "--seed", "0",
-        "--timeout", "150", "--max-tests", str(CONFIG.get("max_tests", 120))], cwd=SRC, env=ENV)
+        "--workers", str(os.cpu_count() or 4), "--limit", str(CONFIG["limit"].get(pkg, 300)),
+        "--seed", str(CONFIG.get("seed", 0)), "--tries", str(CONFIG.get("tries", 3)),
+        "--timeout", "150", "--max-tests", str(CONFIG.get("max_tests", 120)), *extra_args], cwd=SRC, env=ENV)
     tasks = OUT / f"{pkg}_tasks.jsonl"
     sh([sys.executable, "-m", "bugdial.tasks", "--repo", dst, "--graph", graph, "--package", pkg,
         "--mutants", mut, "--out", tasks], cwd=SRC, env=ENV)
