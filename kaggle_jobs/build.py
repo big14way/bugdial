@@ -121,7 +121,7 @@ for pkg in CONFIG["repos"]:
     graph = COMP / "graphs" / f"{pkg}_{r['sha']}.json"
     emb = COMP / "embeddings" / f"{pkg}_{r['sha']}.npz"
     mut = OUT / f"{pkg}_mutants.jsonl"
-    prev = glob.glob(f"/kaggle/input/**/out/{pkg}_mutants.jsonl", recursive=True)
+    prev = [] if pkg in CONFIG.get("noprev", []) else glob.glob(f"/kaggle/input/**/out/{pkg}_mutants.jsonl", recursive=True)
     extra_args = ["--prev", prev[0]] if prev else []
     sh([sys.executable, "-m", "bugdial.plant", "--repo", dst, "--graph", graph, "--package", pkg, "--out", mut,
         "--workers", str(os.cpu_count() or 4), "--limit", str(CONFIG["limit"].get(pkg, 300)),
@@ -177,7 +177,7 @@ log("wheels installed")
 import torch
 from adk_submission import VllmConfig, VllmServer
 COMP = Path(glob.glob("/kaggle/input/**/tasks.jsonl", recursive=True)[0]).parent
-prev = {Path(p).name: Path(p) for p in glob.glob("/kaggle/input/**/*_tasks.jsonl", recursive=True)}
+prev = sorted(Path(p) for p in glob.glob("/kaggle/input/**/*_tasks.jsonl", recursive=True) if not Path(p).name.startswith("real"))
 real = glob.glob("/kaggle/input/**/real_tasks.jsonl", recursive=True)
 log("COMP", COMP, "inputs", list(prev), real)
 gpus = torch.cuda.device_count()
@@ -209,7 +209,7 @@ for model in CONFIG["models"]:
             "--variants", CONFIG.get("variants", "issue,issue_clue"),
             "--max-per-bucket", str(CONFIG.get("max_per_bucket", 60)), "--workers", str(CONFIG.get("workers", 24)),
             "--max-steps", str(CONFIG.get("max_steps", 8))]
-    tasks = [str(p) for n, p in sorted(prev.items()) if n.split("_")[0] in CONFIG.get("repos", ["rich", "requests"])]
+    tasks = [str(p) for p in prev if p.name.split("_")[0] in CONFIG.get("repos", ["rich", "requests"])]
     if tasks:
         args += ["--tasks", *tasks]
     if real and CONFIG.get("real", True):

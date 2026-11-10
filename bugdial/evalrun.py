@@ -124,7 +124,7 @@ def main():
 
     # ---- synthetic tasks, balanced by distance bucket
     rng = random.Random(a.seed)
-    synth = [json.loads(l) for p in a.tasks for l in open(p)]
+    synth = list({t["task_id"]: t for t in (json.loads(l) for p in a.tasks for l in open(p))}.values())
     buckets: dict[str, list] = {}
     for t in synth:
         b = "none" if t["d"] is None else ("3+" if t["d"] >= 3 else str(t["d"]))
