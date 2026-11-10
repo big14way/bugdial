@@ -1,0 +1,20 @@
+# environments and caches
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# competition data and third-party code are not redistributed here
+data/
+repos/
+ref/
+
+# run outputs (published separately as a dataset once final)
+out/
+
+# generated Kaggle kernels (build.py regenerates them; they embed the packed source)
+kaggle_jobs/*/
+
+# private working notes and drafts
+NOTES.md
+paper/
