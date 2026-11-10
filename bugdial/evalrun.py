@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .agent import ARMS, RepoView, run_episode
+from .agent import ARMS, RepoView, graph_context, run_episode
 from .graph import CodeGraph
 
 SHAS = {"rich": "19c67b9a3479841e9133bea94607c89ee931d3fc",
@@ -45,10 +45,15 @@ class MiniClient:
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
 
     def create(self, **body):
+        import urllib.error
         import urllib.request
         req = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=self.timeout) as r:
-            data = json.loads(r.read())
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                data = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:400]
+            raise RuntimeError(f"HTTP {e.code}: {body}") from None
         return _NS(data)
 
 
@@ -168,6 +173,16 @@ def main():
     lock = threading.Lock()
     real_views: dict[str, RepoView] = {}
 
+    locators: dict[str, object] = {}
+
+    def locator_for(kind, t, cg):
+        from .locate import Locator
+        key = t["repo"] if kind == "synth" else t["task_id"]
+        with lock:
+            if key not in locators:
+                locators[key] = Locator(cg, None)
+            return locators[key]
+
     def view_for(kind, t):
         pkg = t["repo"]
         if kind == "synth":
@@ -186,13 +201,17 @@ def main():
     def work(job):
         kind, t, arm, var = job
         view, override = view_for(kind, t)
-        ep = run_episode(client, a.model, view, t, arm, var, a.max_steps, override)
+        ctx = ""
+        if arm.startswith("ctx_"):
+            loc = locator_for(kind, t, view.cg) if arm.startswith("ctx_short") else None
+            ctx = graph_context(arm, view, t[var], loc)
+        ep = run_episode(client, a.model, view, t, arm, var, a.max_steps, override, context=ctx)
         gold = [t["v"]] if kind == "synth" else t["gold"]
         rank = next((i + 1 for i, r in enumerate(ep.resolved) if r in gold), None)
         return {"kind": kind, "task_id": t["task_id"], "repo": t["repo"], "d": t["d"], "arm": arm, "variant": var,
                 "model": a.model, "rank": rank, "submitted": ep.submitted, "resolved": ep.resolved,
                 "calls": ep.calls, "steps": ep.steps, "error": ep.error, "secs": round(ep.secs, 1),
-                "empty_retry": getattr(ep, "empty_retry", False),
+                "empty_retry": getattr(ep, "empty_retry", False), "ctx_chars": len(ctx),
                 "named": t.get("named", t.get("name_in_issue"))}
 
     done = 0
