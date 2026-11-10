@@ -1,0 +1,7 @@
+{
+  "title": "BugDial: how far is the bug",
+  "id": "godswillidolor/bugdial",
+  "licenses": [{"name": "CC-BY-4.0"}],
+  "subtitle": "Test-verified localization tasks with controlled symptom-to-cause distance",
+  "keywords": ["software engineering", "graphs"]
+}

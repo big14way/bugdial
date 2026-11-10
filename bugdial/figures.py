@@ -51,7 +51,10 @@ def main():
 
     loc = [json.loads(l) for p in Path(a.locate).glob("*_locate.jsonl") for l in open(p)]
     loc = [r for r in loc if r["variant"] == "issue"]
-    A = [json.loads(l) for l in open(a.agents)]
+    ap_ = Path(a.agents)
+    files = sorted(ap_.glob("episodes_*.jsonl")) if ap_.is_dir() else [ap_]
+    A = [json.loads(l) for f in files for l in open(f)]
+    A = [e for e in A if "arm" in e]
     A = [e for e in A if e["kind"] == "synth" and e["variant"] == "issue"]
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 3.9), dpi=170)
