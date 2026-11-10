@@ -99,6 +99,22 @@ def main():
                     cells.append(f"{k/len(x):.2f}")
                     curves.setdefault((var, m), []).append((b, k / len(x), wilson(k, len(x)), len(x)))
                 out.append(f"| {b} | {len(rs)} | " + " | ".join(cells) + " |")
+        # paired sign tests on the same tasks (hit@10), no-clue variant
+        hit = {(r["task_id"], r["method"]): r["rank"] <= 10 for r in loc if r["variant"] == "issue"}
+        dmap = {r["task_id"]: bucket(r["d"]) for r in loc}
+        pairs = [("undir_bm25", "dir_bm25"), ("ppr_undir", "ppr_dir"), ("graph_undir", "graph_dir"),
+                 ("bm25", "dir_bm25"), ("bm25", "ppr_dir"), ("emb", "bm25")]
+        out.append("\n### Paired comparisons, no clue (B wins / A wins on tasks where they disagree; exact sign test)\n\n| A | B | d | B wins | A wins | p |\n|---|---|---|---|---|---|")
+        for A, B in pairs:
+            if not any(k[1] == A for k in hit) or not any(k[1] == B for k in hit):
+                continue
+            for b in ["1", "2", "3+", "1-3+"]:
+                ids = [t for t, bb in dmap.items() if (bb == b or (b == "1-3+" and bb in ("1", "2", "3+")))]
+                bw = sum(1 for t in ids if hit.get((t, B)) and not hit.get((t, A)))
+                aw = sum(1 for t in ids if hit.get((t, A)) and not hit.get((t, B)))
+                n = aw + bw
+                p = min(1.0, 2 * sum(math.comb(n, k) for k in range(0, min(aw, bw) + 1)) / 2 ** n) if n else 1.0
+                out.append(f"| {A} | {B} | {b} | {bw} | {aw} | {p:.3g} |")
 
     # ---- real tasks
     rt = D / "real_tasks.jsonl"
