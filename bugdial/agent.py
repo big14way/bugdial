@@ -61,15 +61,24 @@ class RepoView:
         self.fns = [n for n in cg.library if cg.text[n].lstrip().startswith(("def ", "async def "))]
 
     def _resolve(self, name: str) -> str | None:
-        name = name.strip().strip("`").removesuffix("()")
+        """Resolve a model-written name to a graph id. Models often use public import paths
+        (requests.Session.request, requests.get), so we try progressively shorter dotted suffixes;
+        among several matches we prefer ids that contain the dropped prefix parts, then the shortest."""
+        name = name.strip().strip("`").split("(")[0].strip().rstrip(".")
+        if not name:
+            return None
         if name in self.cg.text:
             return name
-        hits = [n for n in self.cg.library if n.endswith("." + name)] or \
-               [n for n in self.cg.library if n.lower().endswith("." + name.lower())]
-        if not hits:
-            return None
-        hits.sort(key=lambda n: (len(n), n))
-        return hits[0]
+        parts = name.split(".")
+        for k in range(len(parts)):
+            suf = ".".join(parts[k:])
+            hits = [n for n in self.cg.library if n.endswith("." + suf) or n == suf] or \
+                   [n for n in self.cg.library if n.lower().endswith("." + suf.lower())]
+            if hits:
+                dropped = [p for p in parts[:k] if p]
+                hits.sort(key=lambda n: (-sum(p in n.split(".") for p in dropped), len(n), n))
+                return hits[0]
+        return None
 
     def search_code(self, pattern: str) -> str:
         try:
@@ -144,6 +153,7 @@ class Episode:
 def run_episode(client, model: str, view: RepoView, task: dict, arm: str, variant: str,
                 max_steps: int = 8, override: dict[str, str] | None = None, temperature: float = 0.0) -> Episode:
     ep = Episode(task["task_id"], arm, variant)
+    ep.empty_retry = False
     t0 = time.time()
     names = ARMS[arm]
     tools = [{"type": "function", "function": {"name": n, **TOOL_SPECS[n]}} for n in names]
@@ -177,6 +187,23 @@ def run_episode(client, model: str, view: RepoView, task: dict, arm: str, varian
                     fs = args.get("functions") or []
                     if isinstance(fs, str):
                         fs = [fs]
+                    if not fs and not ep.empty_retry:
+                        # one explicit retry: forced tool choice sometimes yields submit({})
+                        ep.empty_retry = True
+                        msgs.append({"role": "tool", "tool_call_id": c.id,
+                                     "content": "error: `functions` must be a non-empty list of fully qualified function names"})
+                        r2 = client.chat.completions.create(
+                            model=model, messages=msgs, tools=tools, temperature=temperature, max_tokens=1024,
+                            tool_choice={"type": "function", "function": {"name": "submit"}})
+                        for c2 in (r2.choices[0].message.tool_calls or []):
+                            try:
+                                fs = json.loads(c2.function.arguments or "{}").get("functions") or []
+                            except json.JSONDecodeError:
+                                fs = []
+                            if isinstance(fs, str):
+                                fs = [fs]
+                            if fs:
+                                break
                     ep.submitted = [str(f) for f in fs][:3]
                     ep.resolved = [view._resolve(f) for f in ep.submitted]
                     ep.secs = time.time() - t0

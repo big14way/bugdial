@@ -192,6 +192,7 @@ def main():
         return {"kind": kind, "task_id": t["task_id"], "repo": t["repo"], "d": t["d"], "arm": arm, "variant": var,
                 "model": a.model, "rank": rank, "submitted": ep.submitted, "resolved": ep.resolved,
                 "calls": ep.calls, "steps": ep.steps, "error": ep.error, "secs": round(ep.secs, 1),
+                "empty_retry": getattr(ep, "empty_retry", False),
                 "named": t.get("named", t.get("name_in_issue"))}
 
     done = 0
