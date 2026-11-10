@@ -158,8 +158,12 @@ tp = 4 if gpus >= 4 else (2 if gpus >= 2 else 1)
 log("gpus", gpus, [torch.cuda.get_device_name(i) for i in range(gpus)])
 ENV = dict(os.environ, PYTHONPATH=str(SRC))
 for model in CONFIG["models"]:
-    cands = glob.glob(f"/kaggle/input/**/{model}/2", recursive=True) + glob.glob(f"/kaggle/input/**/{model}", recursive=True)
-    mp = Path(sorted(cands, key=len)[0])
+    std = Path(f"/kaggle/input/models/google/gemma-4/other/{model}/2")
+    if (std / "config.json").exists():
+        mp = std
+    else:
+        cfgs = glob.glob(f"/kaggle/input/**/{model}/**/config.json", recursive=True)
+        mp = Path(sorted(cfgs, key=len)[0]).parent
     log("model", model, mp)
     cfg = VllmConfig(model=str(mp), port=8000, host="127.0.0.1", tool_call_parser="gemma4", reasoning_parser="gemma4",
                      max_model_len=32768, dtype="bfloat16" if torch.cuda.is_bf16_supported() else "auto",
