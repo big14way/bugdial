@@ -253,7 +253,7 @@ def build(job: str, config: dict, kind: str = "plant", sources: list[str] | None
 if __name__ == "__main__":
     job = sys.argv[1] if len(sys.argv) > 1 else "plant"
     extra = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
-    if job.startswith("eval"):
+    if job.startswith("eval") or "models" in extra:  # evaluation = any job that names models
         cfg = {"models": ["gemma-4-e4b-it-qat-w4a16-ct"], "repos": ["rich", "requests"],
                "arms": "text,graph,callee", "variants": "issue,issue_clue", "max_per_bucket": 60,
                "workers": 24, "max_steps": 8, "real": True}
