@@ -199,7 +199,68 @@ def main():
         fig.tight_layout()
         fig.savefig(Path(a.fig) / f"curve_{g.replace(':', '_')}.png")
         plt.close(fig)
+    paper_figure(curves, Path(a.fig), plt)
     print("figures in", a.fig)
+
+
+def paper_figure(curves, outdir: Path, plt):
+    """Figure 1: (a) model-free, direction pairs; (b) agents by tool arm, if present."""
+    style = {  # name: (label, colour, linestyle)
+        "bm25": ("BM25", "#555555", "-"),
+        "emb": ("released embeddings", "#9a9a9a", ":"),
+        "undir_bm25": ("BM25 within 3 hops, undirected", "#1f77b4", "--"),
+        "dir_bm25": ("BM25 within 3 hops, downstream", "#1f77b4", "-"),
+        "ppr_undir": ("PPR + BM25, undirected", "#d62728", "--"),
+        "ppr_dir": ("PPR + BM25, directed", "#d62728", "-"),
+    }
+    agent_groups = sorted(g for g in {k[0] for k in curves} if g.startswith("agent:") and g.endswith(":issue"))
+    ncols = 1 + (1 if agent_groups else 0)
+    fig, axes = plt.subplots(1, ncols, figsize=(5.4 * ncols, 3.6), dpi=170, squeeze=False)
+    xs_lab = ["0", "1", "2", "3+"]
+
+    def draw(ax, pts, label, color, ls, off=0.0):
+        pts = [p for p in pts if p[0] in xs_lab]
+        if not pts:
+            return
+        xs = [xs_lab.index(p[0]) + off for p in pts]
+        ys = [p[1] for p in pts]
+        lo = [max(0.0, p[1] - p[2][0]) for p in pts]
+        hi = [max(0.0, p[2][1] - p[1]) for p in pts]
+        ax.errorbar(xs, ys, yerr=[lo, hi], fmt="none", ecolor=color, capsize=2, elinewidth=0.8, alpha=0.8)
+        ax.plot(xs, ys, color=color, ls=ls, marker="o", ms=3.5, lw=1.6, label=label)
+
+    ax = axes[0][0]
+    for i, (m, (lab, col, ls)) in enumerate(style.items()):
+        if ("issue", m) in curves:
+            draw(ax, curves[("issue", m)], lab, col, ls, off=(i - 2.5) * 0.03)
+    n_by = {p[0]: p[3] for p in curves.get(("issue", "bm25"), [])}
+    ax.set_xticks(range(4), [f"{x}\n(n={n_by.get(x, 0)})" for x in xs_lab])
+    ax.set_xlabel("symptom-to-cause distance d (call hops)")
+    ax.set_ylabel("bug in top 10 (acc@10)")
+    ax.set_ylim(0, 1.02)
+    ax.set_title("(a) model-free localization, report without the name", fontsize=9)
+    ax.legend(fontsize=6.5, frameon=False, loc="upper right")
+    ax.grid(alpha=0.25)
+    if agent_groups:
+        ax = axes[0][1]
+        acol = {"text": ("grep + read", "#555555"), "graph": ("+ official graph tools", "#9467bd"),
+                "callee": ("+ downstream callees", "#2ca02c")}
+        for g in agent_groups:
+            model = g.split(":")[1].replace("gemma-4-", "").replace("-it-qat-w4a16-ct", "").upper()
+            ls = "-" if "E4B" in model else "--"
+            for j, (arm, (lab, col)) in enumerate(acol.items()):
+                if (g, arm) in curves:
+                    draw(ax, curves[(g, arm)], f"{model} {lab}", col, ls, off=(j - 1) * 0.04)
+        ax.set_xticks(range(4), xs_lab)
+        ax.set_xlabel("symptom-to-cause distance d (call hops)")
+        ax.set_ylabel("bug among the agent's 3 answers (acc@3)")
+        ax.set_ylim(0, 1.02)
+        ax.set_title("(b) Gemma 4 agents, 8 tool calls, report without the name", fontsize=9)
+        ax.legend(fontsize=6.5, frameon=False, loc="upper right")
+        ax.grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(outdir / "figure1.png")
+    plt.close(fig)
 
 
 if __name__ == "__main__":
