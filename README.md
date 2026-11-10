@@ -62,10 +62,22 @@ python -m bugdial.report --in <downloaded outputs> --fig fig/
 
 The model-free parts (`locate`, `report`) also run locally on downloaded task files.
 
-## Status
+## Results and data
 
-Work in progress for the Paper Track (deadline 12 Nov 2026). Results, the task dataset and the
-paper will be linked here.
+Submitted to the Gemma 4 Developer Agent Paper Track as *How Far Is the Bug? Symptom-to-Cause
+Distance and Code Graphs in Small Agents* (the writeup becomes public when the track closes).
+
+- Dataset (454 tasks, all ranks, 10,220 Gemma 4 agent episodes, public-task labels, graph audit):
+  https://www.kaggle.com/datasets/godswillidolor/bugdial
+- Reproduction notebook (re-audits the graphs, recomputes all ranks, tables and Figure 1):
+  https://www.kaggle.com/code/godswillidolor/bugdial-how-far-is-the-bug-reproduction
+
+Headline numbers (reports without the buggy function's name):
+- at two call hops, BM25 restricted to code downstream of the report's symbols finds the bug in
+  its top 10 for 45% of tasks, against 22% for BM25 and 26% for the same restriction ignoring
+  direction (25 to 4 paired wins, p = 1e-4);
+- Gemma 4 E4B/E2B rarely call graph tools; a BM25 shortlist in the prompt lifts top-1 on the
+  public tasks from 0.21 to 0.40, and graph-restricted shortlists add little beyond it.
 
 ## License
 
