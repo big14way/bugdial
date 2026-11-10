@@ -142,7 +142,8 @@ def main():
             EE = [e for e in E if e["kind"] == kind]
             if not EE:
                 continue
-            arms = sorted({e["arm"] for e in EE}, key=lambda x: ["text", "graph", "callee"].index(x))
+            _AO = ["text", "graph", "callee", "ctx_callee", "ctx_short_undir", "ctx_short_dir"]
+            arms = sorted({e["arm"] for e in EE}, key=lambda x: _AO.index(x) if x in _AO else 9)
             for var in sorted({e["variant"] for e in EE}):
                 out.append(f"\n{kind} / {var}: acc@1 (acc@3) by d\n\n| d | n | " + " | ".join(arms) + " | mean calls |\n|---|---|" + "---|" * (len(arms) + 1))
                 for b in ORDER + ["ALL"]:

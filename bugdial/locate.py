@@ -18,7 +18,44 @@ from pathlib import Path
 
 import networkx as nx
 import numpy as np
-from rank_bm25 import BM25Okapi
+class BM25Okapi:
+    """BM25 (Okapi), same formula and defaults as rank_bm25.BM25Okapi (k1=1.5, b=0.75, epsilon=0.25).
+    Vendored so the code runs on offline GPU sessions where rank_bm25 is not installed."""
+
+    def __init__(self, corpus, k1=1.5, b=0.75, epsilon=0.25):
+        self.k1, self.b, self.epsilon = k1, b, epsilon
+        self.corpus_size = len(corpus)
+        self.doc_len = [len(d) for d in corpus]
+        self.avgdl = sum(self.doc_len) / max(1, self.corpus_size)
+        self.doc_freqs = []
+        nd: dict[str, int] = {}
+        for doc in corpus:
+            f: dict[str, int] = {}
+            for w in doc:
+                f[w] = f.get(w, 0) + 1
+            self.doc_freqs.append(f)
+            for w in f:
+                nd[w] = nd.get(w, 0) + 1
+        self.idf: dict[str, float] = {}
+        idf_sum, neg = 0.0, []
+        for w, n in nd.items():
+            v = math.log(self.corpus_size - n + 0.5) - math.log(n + 0.5)
+            self.idf[w] = v
+            idf_sum += v
+            if v < 0:
+                neg.append(w)
+        eps = self.epsilon * (idf_sum / max(1, len(self.idf)))
+        for w in neg:
+            self.idf[w] = eps
+        self._dl = np.array(self.doc_len, dtype=float)
+
+    def get_scores(self, query):
+        score = np.zeros(self.corpus_size)
+        norm = self.k1 * (1 - self.b + self.b * self._dl / self.avgdl)
+        for q in query:
+            qf = np.array([d.get(q, 0) for d in self.doc_freqs], dtype=float)
+            score += (self.idf.get(q) or 0) * (qf * (self.k1 + 1) / (qf + norm))
+        return score
 
 from .graph import CodeGraph, mentioned_nodes
 
